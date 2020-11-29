@@ -89,6 +89,7 @@ class LogHelper:
 """
 class SheetTranslator:
     m_filePath = ""
+    m_outPath = ""
     m_sheetName = ""
     m_packageName = ""
     m_filter = ""
@@ -111,11 +112,12 @@ class SheetTranslator:
     m_itemArr = None
 
 
-    def Init(self, filePath, packageName, sheetName, sheetId, filter):
+    def Init(self, filePath, args):
         self.m_filePath = filePath
-        self.m_sheetName = sheetName
-        self.m_packageName = packageName
-        self.m_filter = filter
+        self.m_outPath = args.out_path
+        self.m_sheetName = args.sheet_name
+        self.m_packageName = args.package
+        self.m_filter = args.filter
         self.m_workBook = None
         self.m_sheet = None
         self.m_module = None
@@ -125,7 +127,7 @@ class SheetTranslator:
         self.m_dictMsgStruct = {}
         self.m_content = []
         
-        return self.__Load(sheetId)
+        return self.__Load(args.sheet_id)
 
 
     def __Load(self, sheetId):
@@ -278,10 +280,7 @@ class SheetTranslator:
 
 
     def __GetPBFileName(self):
-        return self.m_sheetName + ".proto"
-
-    def __GetPBBinFileName(self):
-        return self.m_sheetName + ".bytes"
+        return self.m_sheetName.lower() + ".proto"
 
     def __GetModuleName(self):
         return self.m_sheetName.lower() + "_pb2"
@@ -334,21 +333,21 @@ class SheetTranslator:
 
     
     def __WriteToFile(self, fileName, encoding="utf-8"):
-        with open(fileName, "w", encoding=encoding) as f:
+        with open(f"{self.m_outPath+os.sep+fileName}", "w", encoding=encoding) as f:
             f.writelines(self.m_content)
 
     def __WriteBinaryToFile(self, content, fileName):
-        with open(fileName, "wb") as f:
+        with open(f"{self.m_outPath+os.sep+fileName}", "wb") as f:
             f.write(content)
 
-    def LoadProtoModule(self):
+    def LoadProtoModule(self, protocPath):
         moduleName = self.__GetModuleName()
         try:
             import sys
             import os
             
             sys.path.append(os.getcwd())
-            os.system(f"protoc --python_out=./ {self.__GetPBFileName().lower()}")
+            os.system(f"{protocPath + os.sep}protoc.exe --python_out=./ --proto_path={self.m_outPath + os.sep} {self.__GetPBFileName()}")
             exec(f"from {moduleName} import *")
             self.m_module = sys.modules[moduleName]
         except BaseException as e:
@@ -511,7 +510,7 @@ class SheetTranslator:
 
     def GenPBBinFile(self, fileExt):
         data = self.m_itemArr.SerializeToString()
-        self.__WriteBinaryToFile(data, f"{self.m_sheetName}.{fileExt}")
+        self.__WriteBinaryToFile(data, f"{self.m_sheetName.lower()}.{fileExt}")
         
 
     def GenLuaFile(self, content, fileExt):
@@ -543,12 +542,12 @@ class SheetTranslator:
 主逻辑
 """
 def __OneFileRoutine(translator, luaContent, args, fileName):
-    if not translator.Init(fileName, args.package, args.sheet_name, args.sheet_id, args.filter):
+    if not translator.Init(fileName, args):
         return
 
     translator.ParseHead()
     translator.GenProtoFile()
-    translator.LoadProtoModule()
+    translator.LoadProtoModule(args.protoc_path)
     translator.ParseData(luaContent)
     translator.GenPBBinFile(args.bin_ext)
 
@@ -591,5 +590,6 @@ if __name__ == '__main__' :
     parser.add_argument("--package", help="Specify the package name.", required=True)
     parser.add_argument("--lua_ext", help="Specify the lua file extension.", default="lua")
     parser.add_argument("--bin_ext", help="Specify the binary file extension.", default="bytes")
+    parser.add_argument("--protoc_path", help="Specify the protoc execution file path.", required=True)
     __MainRoutine(parser.parse_args())
 
