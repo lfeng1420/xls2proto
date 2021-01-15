@@ -45,14 +45,14 @@ class LogHelper:
         return LogHelper.m_logger is not None
 
     @staticmethod
-    def Create():
-        if LogHelper.m_logger is not None :
+    def Create(logFilePath):
+        if LogHelper.m_logger is not None or len(logFilePath) == 0:
             return
 
         import logging
         LogHelper.m_logger = logging.getLogger()
         if not LogHelper.m_bFileInited:
-            handler = logging.FileHandler("logger.log", encoding="utf-8")
+            handler = logging.FileHandler(logFilePath, encoding="utf-8")
             formatter = logging.Formatter('[%(asctime)s] %(levelname)-9s: %(message)s', '%m-%d %H:%M:%S')
             handler.setFormatter(formatter)
             LogHelper.m_logger.addHandler(handler)
@@ -351,7 +351,20 @@ class SheetTranslator:
             exec(f"from {moduleName} import *")
             self.m_module = sys.modules[moduleName]
         except BaseException as e:
-            print(f"load module '{moduleName}' failed")
+            LogHelper.Error(f"Load module '{moduleName}' failed")
+            raise e
+
+    
+    def UnloadProtoModule(self):
+        moduleName = self.__GetModuleName()
+        try:
+            import sys
+            import os
+            
+            sys.path.append(os.getcwd())
+            os.remove(f"{moduleName}.py")
+        except BaseException as e:
+            LogHelper.Error(f"Unload module '{moduleName}' failed")
             raise e
     
 
@@ -550,6 +563,7 @@ def __OneFileRoutine(translator, luaContent, args, fileName):
     translator.LoadProtoModule(args.protoc_path)
     translator.ParseData(luaContent)
     translator.GenPBBinFile(args.bin_ext)
+    translator.UnloadProtoModule()
 
 
 def __TraverseFiles(translator, luaContent, args, path):
@@ -564,7 +578,7 @@ def __TraverseFiles(translator, luaContent, args, path):
 
 def __MainRoutine(args):
     # LogHelper Create
-    LogHelper.Create()
+    LogHelper.Create(args.log_file)
 
     translator = SheetTranslator()
     luaContent = None
@@ -591,5 +605,6 @@ if __name__ == '__main__' :
     parser.add_argument("--lua_ext", help="Specify the lua file extension.", default="lua")
     parser.add_argument("--bin_ext", help="Specify the binary file extension.", default="bytes")
     parser.add_argument("--protoc_path", help="Specify the protoc execution file path.", required=True)
+    parser.add_argument("--log_file", help="Specify the log file path.", default="")
     __MainRoutine(parser.parse_args())
 
